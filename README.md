@@ -22,6 +22,19 @@ Watch a single file (even if it doesn't exist yet):
 ./bin/x86_64/linux/wch ./file.txt
 ```
 
+### Output example
+
+```bash
+$ ./bin/x86_64/linux/wch /tmp/demo &
+[1] 12345
+$ echo "first" > /tmp/demo/a.txt
+$ echo "more" >> /tmp/demo/a.txt
+$ rm /tmp/demo/a.txt
+add:/tmp/demo/a.txt
+upd:/tmp/demo/a.txt
+del:/tmp/demo/a.txt
+```
+
 ### Parameters
 
 | Flag | Description |
