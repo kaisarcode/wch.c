@@ -114,25 +114,8 @@ make s390x/linux
 make loongarch64/linux
 ```
 
----
+## License
 
-## Backends
+[![GPLv3](https://www.gnu.org/graphics/gplv3-127x51.png)](https://www.gnu.org/licenses/gpl-3.0.html)
 
-| Platform | Backend | Mechanism |
-| :--- | :--- | :--- |
-| Linux | inotify | `inotify_init()` syscall — kernel queues events per fd |
-| macOS, BSD | kqueue | `EVFILT_VNODE` — kernel wakes on NOTE_WRITE/DELETE/RENAME |
-| Windows | ReadDirectoryChangesW | `ReadDirectoryChangesW()` + overlapped I/O |
-| Other | Not supported | `kc_wch_open()` returns NULL |
-
-All backends are **event-driven, not poll-driven**. The process is blocked in a kernel call (`poll()`, `kevent()`, `WaitForSingleObject()`) until a filesystem change occurs. Zero CPU usage while idle.
-
-**Author:** KaisarCode
-
-**Email:** <kaisar@kaisarcode.com>
-
-**Website:** [https://kaisarcode.com](https://kaisarcode.com)
-
-**License:** [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
-
-© 2026 KaisarCode
+This project is distributed under the **GNU General Public License version 3 (GPLv3)**. 
