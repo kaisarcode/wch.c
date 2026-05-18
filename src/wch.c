@@ -14,7 +14,7 @@
 #include <string.h>
 #include <signal.h>
 
-#define KC_WCH_VERSION "0.1.0"
+#define KC_WCH_VERSION "1.0.0"
 
 static volatile int kc_wch_running = 1;
 
