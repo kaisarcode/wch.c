@@ -92,7 +92,7 @@ make clean && make
 
 Compiled artifacts are generated under `bin/{arch}/{platform}/`.
 
-## Multiarch Builds
+### Multiarch Builds
 
 ```bash
 make all
@@ -113,9 +113,10 @@ make mips64el/linux
 make s390x/linux
 make loongarch64/linux
 ```
+---
 
 ## License
 
 [![GPLv3](https://www.gnu.org/graphics/gplv3-127x51.png)](https://www.gnu.org/licenses/gpl-3.0.html)
 
-This project is distributed under the **GNU General Public License version 3 (GPLv3)**. 
+This project is distributed under the **GNU General Public License version 3 (GPLv3)**.
