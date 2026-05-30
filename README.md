@@ -2,7 +2,7 @@
 
 `wch` is a portable native file change notification tool. It watches files and directories for changes and emits `add`, `upd`, and `del` events.
 
-Uses the native kernel API on each platform: inotify (Linux), kqueue (macOS/BSD), ReadDirectoryChangesW (Windows). No polling, no loops — the process blocks in the kernel until a change occurs.
+Uses the native kernel API on each platform: inotify (Linux), kqueue (macOS/BSD), ReadDirectoryChangesW (Windows). No polling, no loops - the process blocks in the kernel until a change occurs.
 
 ---
 
@@ -60,7 +60,11 @@ del:/tmp/dir/oldfile.txt
 ```c
 #include "wch.h"
 
-kc_wch_t *w = kc_wch_open("/path/to/watch", 1);
+kc_wch_options_t opts = kc_wch_options_default();
+opts.recursive = 1;
+
+kc_wch_t *w = NULL;
+kc_wch_open(&w, "/path/to/watch", &opts);
 
 kc_wch_event_t ev;
 while (kc_wch_poll(w, &ev, -1) > 0) {
@@ -72,15 +76,16 @@ while (kc_wch_poll(w, &ev, -1) > 0) {
 }
 
 kc_wch_close(w);
+kc_wch_options_free(&opts);
 ```
 
 ---
 
 ## Lifecycle
 
-- `kc_wch_open()` - Opens a watcher on the given path. Returns NULL on failure. If the path doesn't exist, watches the parent directory instead and filters for the target filename. The `recursive` parameter enables recursive directory watching.
+- `kc_wch_open()` - Opens a watcher on the given path via `kc_wch_options_t`. Returns KC_WCH_OK on success. If the path doesn't exist, watches the parent directory instead and filters for the target filename. Set `opts.recursive` for recursive directory watching.
 - `kc_wch_poll()` - Blocks until a change event occurs. Returns 1 on event, 0 on timeout, -1 on error. The `timeout_ms` parameter controls blocking behavior (-1 = infinite, 0 = no wait).
-- `kc_wch_close()` - Releases the watcher and all associated resources. Safe to call with NULL.
+- `kc_wch_close()` - Releases the watcher and all associated resources. Returns KC_WCH_OK. Safe to call with NULL.
 
 ---
 

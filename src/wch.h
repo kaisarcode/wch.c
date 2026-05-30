@@ -24,17 +24,24 @@ typedef struct kc_wch kc_wch_t;
 #define KC_WCH_DEL     2
 
 typedef struct {
+    int recursive;
+} kc_wch_options_t;
+
+typedef void (*kc_wch_signal_callback_t)(kc_wch_t *w);
+
+typedef struct {
     int type;
     const char *path;
 } kc_wch_event_t;
 
 /**
  * Open a file watcher on the given path.
+ * @param out Output pointer for watcher context.
  * @param path File or directory to watch.
- * @param recursive Non-zero to watch directories recursively.
- * @return Watcher context or NULL on failure.
+ * @param opts Watcher options.
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
  */
-kc_wch_t *kc_wch_open(const char *path, int recursive);
+int kc_wch_open(kc_wch_t **out, const char *path, const kc_wch_options_t *opts);
 
 /**
  * Poll for the next file change event.
@@ -48,9 +55,68 @@ int kc_wch_poll(kc_wch_t *w, kc_wch_event_t *ev, int timeout_ms);
 /**
  * Close a file watcher and release all resources.
  * @param w Watcher context (NULL safe).
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
+ */
+int kc_wch_close(kc_wch_t *w);
+
+/**
+ * Create an options struct initialized with default values.
+ * @return Default-initialized options.
+ */
+kc_wch_options_t kc_wch_options_default(void);
+
+/**
+ * Load configuration from environment variables.
+ * @param opts Options to update.
  * @return None.
  */
-void kc_wch_close(kc_wch_t *w);
+void kc_wch_options_load_env(kc_wch_options_t *opts);
+
+/**
+ * Free dynamically allocated resources within an options struct.
+ * @param opts Options to clean up.
+ * @return None.
+ */
+void kc_wch_options_free(kc_wch_options_t *opts);
+
+/**
+ * Register a handler for a library-level signal number.
+ * @param w Watcher context.
+ * @param sig Application-defined signal number.
+ * @param cb Callback to invoke.
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
+ */
+int kc_wch_on_signal(kc_wch_t *w, int sig, kc_wch_signal_callback_t cb);
+
+/**
+ * Raise a library-level signal.
+ * @param w Watcher context.
+ * @param sig Signal number to raise.
+ * @return KC_WCH_OK if handled, or KC_WCH_ERROR if no handler.
+ */
+int kc_wch_raise_signal(kc_wch_t *w, int sig);
+
+/**
+ * Set the internal signal-listener context.
+ * @param w Watcher context.
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR if ctx is NULL.
+ */
+int kc_wch_listen_signals(kc_wch_t *w);
+
+/**
+ * Wire an OS signal to the library signal listener.
+ * @param w Watcher context.
+ * @param sig_id OS signal number.
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
+ */
+int kc_wch_listen_signal(kc_wch_t *w, int sig_id);
+
+/**
+ * Generic signal-listener compatible with signal() / sigaction().
+ * @param sig OS signal number.
+ * @return None.
+ */
+void kc_wch_signal_listener(int sig);
 
 #ifdef __cplusplus
 }

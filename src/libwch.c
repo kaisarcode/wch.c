@@ -1,6 +1,6 @@
 /**
  * libwch.c - File and directory change notification library
- * Summary: Portable native file watcher — inotify, kqueue, ReadDirectoryChangesW.
+ * Summary: Portable native file watcher - inotify, kqueue, ReadDirectoryChangesW.
  *
  * Author:  KaisarCode
  * Website: https://kaisarcode.com
@@ -19,6 +19,8 @@
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
+#include <signal.h>
+#include <stddef.h>
 
 #ifndef _WIN32
 #include <sys/stat.h>
@@ -44,6 +46,13 @@
 
 #define KC_WCH_QUEUE_SIZE 256
 
+typedef struct {
+    int sig;
+    kc_wch_signal_callback_t cb;
+} kc_wch_signal_entry_t;
+
+static kc_wch_t *g_signal_ctx = NULL;
+
 struct kc_wch {
     char *root;
     int recursive;
@@ -62,6 +71,10 @@ struct kc_wch {
     int q_type[KC_WCH_QUEUE_SIZE];
     char q_path[KC_WCH_QUEUE_SIZE][PATH_MAX];
     int q_used;
+
+    kc_wch_signal_entry_t *signal_handlers;
+    int n_signal_handlers;
+    int signal_handlers_capacity;
 
 #ifdef __linux__
     int ifd;
@@ -686,19 +699,20 @@ static void fill_windows(struct kc_wch *w, int tmo) {
 
 /**
  * Open a file watcher on the given path.
+ * @param out Output pointer for watcher context.
  * @param path File or directory to watch.
- * @param recursive Non-zero to watch directories recursively.
- * @return Watcher context or NULL on failure.
+ * @param opts Watcher options.
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
  */
-kc_wch_t *kc_wch_open(const char *path, int recursive) {
-    if (!path || !*path) return NULL;
+int kc_wch_open(kc_wch_t **out, const char *path, const kc_wch_options_t *opts) {
+    if (!out || !path || !*path || !opts) return KC_WCH_ERROR;
     int exists = 0;
 #ifndef _WIN32
     struct stat st;
     exists = (stat(path, &st) == 0);
 #endif
     struct kc_wch *w = calloc(1, sizeof(*w));
-    if (!w) return NULL;
+    if (!w) return KC_WCH_ERROR;
     if (exists) {
         w->root = strdup(path);
     } else {
@@ -715,7 +729,7 @@ kc_wch_t *kc_wch_open(const char *path, int recursive) {
             *slash = '\0';
             if (!parent[0]) snprintf(parent, PATH_MAX, ".");
 #ifndef _WIN32
-            if (stat(parent, &st) != 0) { free(w); return NULL; }
+            if (stat(parent, &st) != 0) { free(w); return KC_WCH_ERROR; }
 #endif
             w->has_filter = 1;
         } else {
@@ -729,15 +743,16 @@ kc_wch_t *kc_wch_open(const char *path, int recursive) {
         }
         w->root = strdup(parent);
     }
-    if (!w->root) { free(w); return NULL; }
-    w->recursive = recursive;
-    if (!try_backend(w)) { free(w->root); free(w); return NULL; }
+    if (!w->root) { free(w); return KC_WCH_ERROR; }
+    w->recursive = opts->recursive;
+    if (!try_backend(w)) { free(w->root); free(w); return KC_WCH_ERROR; }
     if (w->backend == 1) {
 #ifdef __linux__
         scan_watch_dir(w, w->root);
 #endif
     }
-    return w;
+    *out = w;
+    return KC_WCH_OK;
 }
 
 /**
@@ -778,10 +793,10 @@ int kc_wch_poll(kc_wch_t *w, kc_wch_event_t *ev, int timeout_ms) {
 /**
  * Close a file watcher and release all resources.
  * @param w Watcher context (NULL safe).
- * @return None.
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
  */
-void kc_wch_close(kc_wch_t *w) {
-    if (!w) return;
+int kc_wch_close(kc_wch_t *w) {
+    if (!w) return KC_WCH_OK;
     for (int i = 0; i < w->path_count; i++) free(w->paths[i]);
     free(w->paths);
 #ifdef __linux__
@@ -807,6 +822,134 @@ void kc_wch_close(kc_wch_t *w) {
         CloseHandle(w->hdir);
     }
 #endif
+    free(w->signal_handlers);
     free(w->root);
     free(w);
+    return KC_WCH_OK;
+}
+
+/**
+ * Create an options struct initialized with default values.
+ * @return Default-initialized options.
+ */
+kc_wch_options_t kc_wch_options_default(void) {
+    kc_wch_options_t opts;
+    memset(&opts, 0, sizeof(opts));
+    return opts;
+}
+
+/**
+ * Load configuration from environment variables.
+ * @param opts Options to update.
+ * @return None.
+ */
+void kc_wch_options_load_env(kc_wch_options_t *opts) {
+    (void)opts;
+}
+
+/**
+ * Free dynamically allocated resources within an options struct.
+ * @param opts Options to clean up.
+ * @return None.
+ */
+void kc_wch_options_free(kc_wch_options_t *opts) {
+    (void)opts;
+}
+
+/**
+ * Register a handler for a library-level signal number.
+ * @param w Watcher context.
+ * @param sig Application-defined signal number.
+ * @param cb Callback to invoke (NULL to unregister).
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
+ */
+int kc_wch_on_signal(kc_wch_t *w, int sig, kc_wch_signal_callback_t cb) {
+    int i;
+    if (!w) return KC_WCH_ERROR;
+    for (i = 0; i < w->n_signal_handlers; i++) {
+        if (w->signal_handlers[i].sig == sig) {
+            if (cb) {
+                w->signal_handlers[i].cb = cb;
+            } else {
+                int tail = w->n_signal_handlers - i - 1;
+                if (tail > 0) {
+                    memmove(&w->signal_handlers[i],
+                            &w->signal_handlers[i + 1],
+                            (size_t)tail * sizeof(kc_wch_signal_entry_t));
+                }
+                w->n_signal_handlers--;
+            }
+            return KC_WCH_OK;
+        }
+    }
+    if (!cb) return KC_WCH_OK;
+    if (w->n_signal_handlers >= w->signal_handlers_capacity) {
+        int nc = w->signal_handlers_capacity ? w->signal_handlers_capacity * 2 : 4;
+        kc_wch_signal_entry_t *p = realloc(w->signal_handlers,
+            (size_t)nc * sizeof(kc_wch_signal_entry_t));
+        if (!p) return KC_WCH_ERROR;
+        w->signal_handlers = p;
+        w->signal_handlers_capacity = nc;
+    }
+    w->signal_handlers[w->n_signal_handlers].sig = sig;
+    w->signal_handlers[w->n_signal_handlers].cb = cb;
+    w->n_signal_handlers++;
+    return KC_WCH_OK;
+}
+
+/**
+ * Raise a library-level signal.
+ * @param w Watcher context.
+ * @param sig Signal number to raise.
+ * @return KC_WCH_OK if handled, or KC_WCH_ERROR if no handler.
+ */
+int kc_wch_raise_signal(kc_wch_t *w, int sig) {
+    int i;
+    if (!w) return KC_WCH_ERROR;
+    for (i = 0; i < w->n_signal_handlers; i++) {
+        if (w->signal_handlers[i].sig == sig) {
+            w->signal_handlers[i].cb(w);
+            return KC_WCH_OK;
+        }
+    }
+    return KC_WCH_ERROR;
+}
+
+/**
+ * Set the internal signal-listener context.
+ * @param w Watcher context.
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR if w is NULL.
+ */
+int kc_wch_listen_signals(kc_wch_t *w) {
+    if (!w) return KC_WCH_ERROR;
+    g_signal_ctx = w;
+    return KC_WCH_OK;
+}
+
+/**
+ * Wire an OS signal to the library signal listener.
+ * @param w Watcher context.
+ * @param sig_id OS signal number.
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
+ */
+int kc_wch_listen_signal(kc_wch_t *w, int sig_id) {
+    if (!w) return KC_WCH_ERROR;
+    g_signal_ctx = w;
+#ifdef _WIN32
+    (void)sig_id;
+#else
+    signal(sig_id, kc_wch_signal_listener);
+#endif
+    return KC_WCH_OK;
+}
+
+/**
+ * Generic signal-listener compatible with signal() / sigaction().
+ * @param sig OS signal number.
+ * @return None.
+ */
+void kc_wch_signal_listener(int sig) {
+    if (g_signal_ctx) {
+        kc_wch_raise_signal(g_signal_ctx, sig);
+    }
 }

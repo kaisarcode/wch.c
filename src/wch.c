@@ -14,17 +14,17 @@
 #include <string.h>
 #include <signal.h>
 
-#define KC_WCH_VERSION "1.0.0"
+#define KC_WCH_VERSION "1.1.0"
 
 static volatile int kc_wch_running = 1;
 
 /**
- * Signal handler for SIGINT and SIGTERM.
- * @param sig Signal number.
+ * Signal callback for SIGINT and SIGTERM.
+ * @param w Watcher context.
  * @return None.
  */
-static void kc_wch_signal(int sig) {
-    (void)sig;
+static void kc_wch_signal_cb(kc_wch_t *w) {
+    (void)w;
     kc_wch_running = 0;
 }
 
@@ -90,14 +90,23 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    signal(SIGINT, kc_wch_signal);
-    signal(SIGTERM, kc_wch_signal);
+    kc_wch_options_t opts = kc_wch_options_default();
+    kc_wch_options_load_env(&opts);
 
-    kc_wch_t *w = kc_wch_open(path, 1);
-    if (!w) {
+    kc_wch_t *w = NULL;
+    if (kc_wch_open(&w, path, &opts) != KC_WCH_OK) {
         fprintf(stderr, "wch: failed to watch '%s'\n", path);
+        kc_wch_options_free(&opts);
         return 1;
     }
+
+    kc_wch_on_signal(w, SIGINT, kc_wch_signal_cb);
+    kc_wch_on_signal(w, SIGTERM, kc_wch_signal_cb);
+    kc_wch_listen_signals(w);
+#ifndef _WIN32
+    kc_wch_listen_signal(w, SIGINT);
+    kc_wch_listen_signal(w, SIGTERM);
+#endif
 
     kc_wch_event_t ev;
     const char *labels[] = {"add", "upd", "del"};
@@ -117,5 +126,6 @@ int main(int argc, char **argv) {
     }
 
     kc_wch_close(w);
+    kc_wch_options_free(&opts);
     return 0;
 }
