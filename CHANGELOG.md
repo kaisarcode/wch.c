@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v1.1.1
+
+- Fixed `wch_signal_listener` to restore default signal behavior (SIG_DFL)
+  when no `on_signal` handler is registered.
+
 ## v1.1.0
 
 - Added data-driven configuration lifecycle through `kc_wch_options_t`.
