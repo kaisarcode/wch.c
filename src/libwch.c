@@ -14,6 +14,10 @@
 
 #include "wch.h"
 
+#ifndef KC_WCH_BUILD_VERSION
+#define KC_WCH_BUILD_VERSION 0ULL
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -953,4 +957,12 @@ void kc_wch_signal_listener(int sig) {
         return;
     signal(sig, SIG_DFL);
     raise(sig);
+}
+
+/**
+ * Retrieves the library build version as a Unix timestamp.
+ * @return Build version timestamp.
+ */
+uint64_t kc_wch_version(void) {
+    return (uint64_t)KC_WCH_BUILD_VERSION;
 }

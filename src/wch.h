@@ -10,6 +10,8 @@
 #ifndef KC_WCH_H
 #define KC_WCH_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -117,6 +119,12 @@ int kc_wch_listen_signal(kc_wch_t *w, int sig_id);
  * @return None.
  */
 void kc_wch_signal_listener(int sig);
+
+/**
+ * Retrieves the library build version as a Unix timestamp.
+ * @return Build version timestamp.
+ */
+uint64_t kc_wch_version(void);
 
 #ifdef __cplusplus
 }

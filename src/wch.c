@@ -14,8 +14,6 @@
 #include <string.h>
 #include <signal.h>
 
-#define KC_WCH_VERSION "1.1.1"
-
 static volatile int kc_wch_running = 1;
 
 /**
@@ -47,11 +45,11 @@ static void kc_print_help(const char *name) {
 }
 
 /**
- * Print version information.
+ * Prints the binary version to stdout.
  * @return None.
  */
 static void kc_print_version(void) {
-    printf("wch %s\n", KC_WCH_VERSION);
+    printf("wch build %llu\n", (unsigned long long)kc_wch_version());
 }
 
 /**

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 project(wch C)
 
 set(CMAKE_C_STANDARD 11)
-
+set(KC_WCH_BUILD_VERSION "0" CACHE STRING "wch build version timestamp")
 
 option(WCH_NATIVE "Enable native hardware optimizations" OFF)
 
@@ -19,6 +19,11 @@ if(NOT MSVC)
 else()
     add_compile_options(/O2 /W3 /WX)
 endif()
+
+set_property(
+    SOURCE src/libwch.c
+    APPEND PROPERTY COMPILE_DEFINITIONS KC_WCH_BUILD_VERSION=${KC_WCH_BUILD_VERSION}
+)
 
 # Main executable
 add_executable(wch
