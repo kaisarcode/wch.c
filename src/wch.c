@@ -14,16 +14,13 @@
 #include <string.h>
 #include <signal.h>
 
-static volatile int kc_wch_running = 1;
-
 /**
  * Signal callback for SIGINT and SIGTERM.
  * @param w Watcher context.
  * @return None.
  */
 static void kc_wch_signal_cb(kc_wch_t *w) {
-    (void)w;
-    kc_wch_running = 0;
+    kc_wch_stop(w);
 }
 
 /**
@@ -109,7 +106,7 @@ int main(int argc, char **argv) {
     kc_wch_event_t ev;
     const char *labels[] = {"add", "upd", "del"};
 
-    while (kc_wch_running) {
+    for (;;) {
         int rc = kc_wch_poll(w, &ev, -1);
         if (rc < 0) {
             break;

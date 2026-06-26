@@ -55,7 +55,9 @@ typedef struct {
     kc_wch_signal_callback_t cb;
 } kc_wch_signal_entry_t;
 
-static kc_wch_t *g_signal_ctx = NULL;
+static kc_wch_t **g_signal_ctx_list = NULL;
+static int g_signal_ctx_cap = 0;
+static int g_signal_ctx_count = 0;
 
 struct kc_wch {
     char *root;
@@ -79,6 +81,7 @@ struct kc_wch {
     kc_wch_signal_entry_t *signal_handlers;
     int n_signal_handlers;
     int signal_handlers_capacity;
+    volatile sig_atomic_t stop_requested;
 
 #ifdef __linux__
     int ifd;
@@ -768,6 +771,7 @@ int kc_wch_open(kc_wch_t **out, const char *path, const kc_wch_options_t *opts) 
  */
 int kc_wch_poll(kc_wch_t *w, kc_wch_event_t *ev, int timeout_ms) {
     if (!w || !ev) return -1;
+    if (w->stop_requested) return -1;
     if (dequeue(w, ev)) return 1;
     ev->type = -1;
     ev->path = NULL;
@@ -800,8 +804,15 @@ int kc_wch_poll(kc_wch_t *w, kc_wch_event_t *ev, int timeout_ms) {
  * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
  */
 int kc_wch_close(kc_wch_t *w) {
+    int i;
     if (!w) return KC_WCH_OK;
-    for (int i = 0; i < w->path_count; i++) free(w->paths[i]);
+    for (i = 0; i < g_signal_ctx_count; i++) {
+        if (g_signal_ctx_list[i] == w) {
+            g_signal_ctx_list[i] = g_signal_ctx_list[--g_signal_ctx_count];
+            break;
+        }
+    }
+    for (i = 0; i < w->path_count; i++) free(w->paths[i]);
     free(w->paths);
 #ifdef __linux__
     if (w->backend == 1) {
@@ -858,6 +869,17 @@ void kc_wch_options_load_env(kc_wch_options_t *opts) {
  */
 void kc_wch_options_free(kc_wch_options_t *opts) {
     (void)opts;
+}
+
+/**
+ * Request stop for a specific wch context.
+ * @param w Watcher context.
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
+ */
+int kc_wch_stop(kc_wch_t *w) {
+    if (!w) return KC_WCH_ERROR;
+    w->stop_requested = 1;
+    return KC_WCH_OK;
 }
 
 /**
@@ -926,7 +948,15 @@ int kc_wch_raise_signal(kc_wch_t *w, int sig) {
  */
 int kc_wch_listen_signals(kc_wch_t *w) {
     if (!w) return KC_WCH_ERROR;
-    g_signal_ctx = w;
+    if (g_signal_ctx_count >= g_signal_ctx_cap) {
+        int new_cap = g_signal_ctx_cap ? g_signal_ctx_cap * 2 : 4;
+        kc_wch_t **new_list = (kc_wch_t **)realloc(g_signal_ctx_list,
+            (size_t)new_cap * sizeof(kc_wch_t *));
+        if (!new_list) return KC_WCH_ERROR;
+        g_signal_ctx_list = new_list;
+        g_signal_ctx_cap = new_cap;
+    }
+    g_signal_ctx_list[g_signal_ctx_count++] = w;
     return KC_WCH_OK;
 }
 
@@ -938,7 +968,15 @@ int kc_wch_listen_signals(kc_wch_t *w) {
  */
 int kc_wch_listen_signal(kc_wch_t *w, int sig_id) {
     if (!w) return KC_WCH_ERROR;
-    g_signal_ctx = w;
+    if (g_signal_ctx_count >= g_signal_ctx_cap) {
+        int new_cap = g_signal_ctx_cap ? g_signal_ctx_cap * 2 : 4;
+        kc_wch_t **new_list = (kc_wch_t **)realloc(g_signal_ctx_list,
+            (size_t)new_cap * sizeof(kc_wch_t *));
+        if (!new_list) return KC_WCH_ERROR;
+        g_signal_ctx_list = new_list;
+        g_signal_ctx_cap = new_cap;
+    }
+    g_signal_ctx_list[g_signal_ctx_count++] = w;
 #ifdef _WIN32
     (void)sig_id;
 #else
@@ -953,8 +991,12 @@ int kc_wch_listen_signal(kc_wch_t *w, int sig_id) {
  * @return None.
  */
 void kc_wch_signal_listener(int sig) {
-    if (g_signal_ctx && kc_wch_raise_signal(g_signal_ctx, sig) == 0)
-        return;
+    int i;
+    for (i = 0; i < g_signal_ctx_count; i++) {
+        if (g_signal_ctx_list[i] &&
+            kc_wch_raise_signal(g_signal_ctx_list[i], sig) == 0)
+            return;
+    }
     signal(sig, SIG_DFL);
     raise(sig);
 }

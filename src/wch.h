@@ -20,6 +20,7 @@ typedef struct kc_wch kc_wch_t;
 
 #define KC_WCH_OK      0
 #define KC_WCH_ERROR  -1
+#define KC_WCH_ESTOP  -3
 
 #define KC_WCH_ADD     0
 #define KC_WCH_UPD     1
@@ -97,6 +98,13 @@ int kc_wch_on_signal(kc_wch_t *w, int sig, kc_wch_signal_callback_t cb);
  * @return KC_WCH_OK if handled, or KC_WCH_ERROR if no handler.
  */
 int kc_wch_raise_signal(kc_wch_t *w, int sig);
+
+/**
+ * Request stop for a specific wch context.
+ * @param w Watcher context.
+ * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
+ */
+int kc_wch_stop(kc_wch_t *w);
 
 /**
  * Set the internal signal-listener context.

@@ -181,6 +181,46 @@ kc_test_watch_dir_delete() {
     rm -rf "$tmpdir"
 }
 
+# Tests multi-context isolation: two contexts, stop one, other unaffected.
+# @return 0 on success, 1 on failure.
+kc_test_multi_context() {
+    tmpdir=$(mktemp -d)
+
+    {
+        printf '%s\n' '#include "wch.h"'
+        printf '%s\n' '#include <stdio.h>'
+        printf '%s\n' '#include <string.h>'
+        printf '%s\n' 'int main(void) {'
+        printf '%s\n' '    kc_wch_options_t opts = kc_wch_options_default();'
+        printf '%s\n' '    kc_wch_t *ctx1, *ctx2;'
+        printf '%s\n' '    opts.recursive = 0;'
+        printf '%s\n' '    if (kc_wch_open(&ctx1, ".", &opts) != KC_WCH_OK) return 1;'
+        printf '%s\n' '    if (kc_wch_open(&ctx2, ".", &opts) != KC_WCH_OK) { kc_wch_close(ctx1); return 1; }'
+        printf '%s\n' '    if (kc_wch_stop(NULL) != KC_WCH_ERROR) { kc_wch_close(ctx1); kc_wch_close(ctx2); return 2; }'
+        printf '%s\n' '    if (kc_wch_stop(ctx1) != KC_WCH_OK) { kc_wch_close(ctx1); kc_wch_close(ctx2); return 3; }'
+        printf '%s\n' '    if (kc_wch_poll(ctx1, &(kc_wch_event_t){0}, 0) != -1) { kc_wch_close(ctx1); kc_wch_close(ctx2); return 4; }'
+        printf '%s\n' '    if (kc_wch_poll(ctx2, &(kc_wch_event_t){0}, 0) < -1) { kc_wch_close(ctx1); kc_wch_close(ctx2); return 5; }'
+        printf '%s\n' '    kc_wch_close(ctx1); kc_wch_close(ctx2);'
+        printf '%s\n' '    return 0;'
+        printf '%s\n' '}'
+    } > "$tmpdir/multictx.c"
+
+    cc -I "$PWD/src" "$tmpdir/multictx.c" -L"$PWD/bin/x86_64/linux" -lwch -o "$tmpdir/multictx" -Wl,-rpath,"$PWD/bin/x86_64/linux" || {
+        kc_test_fail "multi_context: compile failed"
+        rm -rf "$tmpdir"
+        return 1
+    }
+
+    if ! "$tmpdir/multictx"; then
+        kc_test_fail "multi_context: run failed"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    rm -rf "$tmpdir"
+    kc_test_pass "multi_context"
+}
+
 # Runs the full validation suite.
 # @return 0 on success, 1 on failure.
 kc_test_main() {
@@ -197,6 +237,8 @@ kc_test_main() {
     kc_test_watch_dir_create || failed=$((failed + 1))
     kc_test_watch_dir_modify || failed=$((failed + 1))
     kc_test_watch_dir_delete || failed=$((failed + 1))
+
+    kc_test_multi_context  || failed=$((failed + 1))
 
     return $failed
 }
