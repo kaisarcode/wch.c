@@ -14,6 +14,9 @@ endif()
 
 if(NOT MSVC)
     add_compile_options(-O3 -Wall -Wextra -Werror)
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        add_compile_options(-Wno-unused-command-line-argument)
+    endif()
     if(WCH_NATIVE)
         add_compile_options(-march=native)
     endif()
@@ -39,7 +42,7 @@ if(NOT WCH_TEST_EXTERNAL_ARTIFACTS)
 
     target_include_directories(wch PRIVATE src)
 
-    if(UNIX AND NOT ANDROID)
+    if(UNIX AND NOT ANDROID AND NOT APPLE)
         target_link_libraries(wch pthread m)
     endif()
 
@@ -52,7 +55,7 @@ if(NOT WCH_TEST_EXTERNAL_ARTIFACTS)
     set_target_properties(wch_shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
     target_include_directories(wch_shared PRIVATE src)
 
-    if(UNIX AND NOT ANDROID)
+    if(UNIX AND NOT ANDROID AND NOT APPLE)
         target_link_libraries(wch_shared pthread m)
     endif()
 endif()
@@ -82,7 +85,7 @@ if(WCH_BUILD_TESTS)
     target_include_directories(wch_contract_test PRIVATE src)
     target_link_libraries(wch_contract_test PRIVATE ${WCH_TEST_SHARED_TARGET})
 
-    if(UNIX AND NOT ANDROID)
+    if(UNIX AND NOT ANDROID AND NOT APPLE)
         target_link_libraries(wch_contract_test PRIVATE m)
     endif()
 
