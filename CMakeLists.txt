@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.14)
 project(wch C)
 
 set(CMAKE_C_STANDARD 11)
-set(KC_WCH_BUILD_VERSION "0" CACHE STRING "wch build version timestamp")
+if(NOT DEFINED KC_WCH_BUILD_VERSION)
+    set(KC_WCH_BUILD_VERSION 0)
+endif()
 
 option(WCH_NATIVE "Enable native hardware optimizations" OFF)
 option(WCH_BUILD_TESTS "Build wch tests" OFF)
@@ -14,6 +16,9 @@ endif()
 
 if(NOT MSVC)
     add_compile_options(-O3 -Wall -Wextra -Werror)
+    if(APPLE)
+        add_compile_options(-Wno-unused-function)
+    endif()
     if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         add_compile_options(-Wno-unused-command-line-argument)
     endif()
@@ -22,6 +27,8 @@ if(NOT MSVC)
     endif()
     if(WIN32)
         add_definitions(-D_GNU_SOURCE -DWINVER=0x0600 -D_WIN32_WINNT=0x0600)
+    elseif(APPLE)
+        add_definitions(-D_DARWIN_C_SOURCE -D_GNU_SOURCE)
     else()
         add_definitions(-D_GNU_SOURCE)
     endif()
@@ -29,9 +36,8 @@ else()
     add_compile_options(/O2 /W3 /WX)
 endif()
 
-set_property(
-    SOURCE src/libwch.c
-    APPEND PROPERTY COMPILE_DEFINITIONS KC_WCH_BUILD_VERSION=${KC_WCH_BUILD_VERSION}
+set_source_files_properties(src/libwch.c PROPERTIES
+    COMPILE_DEFINITIONS KC_WCH_BUILD_VERSION=${KC_WCH_BUILD_VERSION}
 )
 
 if(NOT WCH_TEST_EXTERNAL_ARTIFACTS)

@@ -14,7 +14,8 @@
 
 #include "wch.h"
 
-#ifndef KC_WCH_BUILD_VERSION
+#if !defined(KC_WCH_BUILD_VERSION) || KC_WCH_BUILD_VERSION + 0 == 0
+#undef KC_WCH_BUILD_VERSION
 #define KC_WCH_BUILD_VERSION 0ULL
 #endif
 
