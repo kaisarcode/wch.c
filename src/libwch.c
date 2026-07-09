@@ -12,7 +12,7 @@
 #define _XOPEN_SOURCE 700
 #endif
 
-#include "wch.h"
+#include "libwch.h"
 
 #if !defined(KC_WCH_BUILD_VERSION) || KC_WCH_BUILD_VERSION + 0 == 0
 #undef KC_WCH_BUILD_VERSION

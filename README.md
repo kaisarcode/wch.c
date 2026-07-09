@@ -58,7 +58,7 @@ del:/tmp/dir/oldfile.txt
 ## Public API
 
 ```c
-#include "wch.h"
+#include "libwch.h"
 
 kc_wch_options_t opts = kc_wch_options_default();
 opts.recursive = 1;
