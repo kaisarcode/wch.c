@@ -11,7 +11,7 @@ local programs that can re-read filesystem truth after receiving a hint.
 ## Architecture
 
 One watcher context owns a root, optional basename filter, known-path state,
-native backend resources, a fixed event queue, signal callbacks, and stop state.
+native backend resources, a fixed event queue, and stop state.
 `kc_wch_poll()` first drains queued normalized events, then waits on the native
 backend and translates newly available activity.
 
@@ -122,7 +122,7 @@ not provide a portable wake handle for an already blocked infinite poll.
 ## Ownership and Cleanup
 
 The watcher owns its root, known paths, queue storage, backend mappings, native
-descriptors or handles, callback storage, and event-path buffer. The caller owns
+descriptors or handles, and event-path buffer. The caller owns
 the watcher pointer and closes it with `kc_wch_close()`.
 
 The event structure borrows its path. Options own no dynamic memory. Closing a

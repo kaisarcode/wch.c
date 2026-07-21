@@ -30,8 +30,6 @@ typedef struct {
     int recursive;
 } kc_wch_options_t;
 
-typedef void (*kc_wch_signal_callback_t)(kc_wch_t *w);
-
 typedef struct {
     int type;
     const char *path;
@@ -83,50 +81,11 @@ void kc_wch_options_load_env(kc_wch_options_t *opts);
 void kc_wch_options_free(kc_wch_options_t *opts);
 
 /**
- * Register a handler for a library-level signal number.
- * @param w Watcher context.
- * @param sig Application-defined signal number.
- * @param cb Callback to invoke.
- * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
- */
-int kc_wch_on_signal(kc_wch_t *w, int sig, kc_wch_signal_callback_t cb);
-
-/**
- * Raise a library-level signal.
- * @param w Watcher context.
- * @param sig Signal number to raise.
- * @return KC_WCH_OK if handled, or KC_WCH_ERROR if no handler.
- */
-int kc_wch_raise_signal(kc_wch_t *w, int sig);
-
-/**
  * Request stop for a specific wch context.
  * @param w Watcher context.
  * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
  */
 int kc_wch_stop(kc_wch_t *w);
-
-/**
- * Set the internal signal-listener context.
- * @param w Watcher context.
- * @return KC_WCH_OK on success, or KC_WCH_ERROR if ctx is NULL.
- */
-int kc_wch_listen_signals(kc_wch_t *w);
-
-/**
- * Wire an OS signal to the library signal listener.
- * @param w Watcher context.
- * @param sig_id OS signal number.
- * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
- */
-int kc_wch_listen_signal(kc_wch_t *w, int sig_id);
-
-/**
- * Generic signal-listener compatible with signal() / sigaction().
- * @param sig OS signal number.
- * @return None.
- */
-void kc_wch_signal_listener(int sig);
 
 /**
  * Retrieves the library build version as a Unix timestamp.

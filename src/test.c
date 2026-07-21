@@ -13,27 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-#include <io.h>
-#include <process.h>
-#define getpid _getpid
-#else
-#include <signal.h>
-#include <unistd.h>
-#endif
-
-static int signal_count = 0;
-static kc_wch_t *signal_ctx_seen = NULL;
-
-/**
- * Records one signal callback invocation.
- * @param ctx Context supplied by the library.
- * @return None.
- */
-static void count_signal(kc_wch_t *ctx) {
-    if (ctx) { signal_count++; signal_ctx_seen = ctx; }
-}
-
 /**
  * Verifies one integer result.
  * @param name Check description.
@@ -156,126 +135,6 @@ static int case_poll(void) {
 }
 
 /**
- * Tests kc_wch_on_signal.
- * @return 0 on success, 1 on failure.
- */
-static int case_on_signal(void) {
-    kc_wch_t *w;
-    kc_wch_options_t opts;
-    int rc;
-    int i;
-
-    rc = 0;
-    signal_count = 0;
-    rc += expect_int("on_signal NULL returns ERROR", KC_WCH_ERROR, kc_wch_on_signal(NULL, 1, count_signal));
-    opts = kc_wch_options_default();
-    if (kc_wch_open(&w, "/tmp", &opts) != KC_WCH_OK) return 1;
-    rc += expect_int("remove missing returns OK", KC_WCH_OK, kc_wch_on_signal(w, 1, NULL));
-    rc += expect_int("register returns OK", KC_WCH_OK, kc_wch_on_signal(w, 1, count_signal));
-    rc += expect_int("raise returns OK", KC_WCH_OK, kc_wch_raise_signal(w, 1));
-    rc += expect_int("handler invoked", 1, signal_count);
-    rc += expect_int("remove returns OK", KC_WCH_OK, kc_wch_on_signal(w, 1, NULL));
-    rc += expect_int("raise removed returns ERROR", KC_WCH_ERROR, kc_wch_raise_signal(w, 1));
-    for (i = 0; i < 8; i++) {
-        rc += expect_int("register growth returns OK", KC_WCH_OK, kc_wch_on_signal(w, 200 + i, count_signal));
-    }
-    kc_wch_close(w);
-    return rc == 0 ? 0 : 1;
-}
-
-/**
- * Tests kc_wch_raise_signal.
- * @return 0 on success, 1 on failure.
- */
-static int case_raise_signal(void) {
-    kc_wch_t *w;
-    kc_wch_options_t opts;
-    int rc;
-
-    rc = 0;
-    signal_count = 0;
-    signal_ctx_seen = NULL;
-    rc += expect_int("raise_signal NULL returns ERROR", KC_WCH_ERROR, kc_wch_raise_signal(NULL, 1));
-    opts = kc_wch_options_default();
-    if (kc_wch_open(&w, "/tmp", &opts) != KC_WCH_OK) return 1;
-    rc += expect_int("raise unhandled returns ERROR", KC_WCH_ERROR, kc_wch_raise_signal(w, 1));
-    kc_wch_on_signal(w, 1, count_signal);
-    rc += expect_int("raise handled returns OK", KC_WCH_OK, kc_wch_raise_signal(w, 1));
-    rc += expect_true("context matches", signal_ctx_seen == w);
-    kc_wch_close(w);
-    return rc == 0 ? 0 : 1;
-}
-
-/**
- * Tests kc_wch_listen_signals.
- * @return 0 on success, 1 on failure.
- */
-static int case_listen_signals(void) {
-    kc_wch_t *w;
-    kc_wch_options_t opts;
-    int rc;
-
-    rc = 0;
-    signal_count = 0;
-    signal_ctx_seen = NULL;
-    rc += expect_int("listen_signals NULL returns ERROR", KC_WCH_ERROR, kc_wch_listen_signals(NULL));
-    opts = kc_wch_options_default();
-    if (kc_wch_open(&w, "/tmp", &opts) != KC_WCH_OK) return 1;
-    kc_wch_on_signal(w, 44, count_signal);
-    rc += expect_int("listen_signals returns OK", KC_WCH_OK, kc_wch_listen_signals(w));
-    kc_wch_signal_listener(44);
-    rc += expect_int("listener dispatched", 1, signal_count);
-    rc += expect_true("correct context", signal_ctx_seen == w);
-    kc_wch_close(w);
-    return rc == 0 ? 0 : 1;
-}
-
-/**
- * Tests kc_wch_listen_signal.
- * @return 0 on success, 1 on failure.
- */
-static int case_listen_signal(void) {
-    kc_wch_t *w;
-    kc_wch_options_t opts;
-    int rc;
-
-    rc = 0;
-    rc += expect_int("listen_signal NULL returns ERROR", KC_WCH_ERROR, kc_wch_listen_signal(NULL, 1));
-    opts = kc_wch_options_default();
-    if (kc_wch_open(&w, "/tmp", &opts) != KC_WCH_OK) return 1;
-#ifdef _WIN32
-    rc += expect_int("listen_signal returns OK", KC_WCH_OK, kc_wch_listen_signal(w, 2));
-#else
-    rc += expect_int("listen_signal returns OK", KC_WCH_OK, kc_wch_listen_signal(w, SIGUSR1));
-#endif
-    kc_wch_close(w);
-    return rc == 0 ? 0 : 1;
-}
-
-/**
- * Tests kc_wch_signal_listener.
- * @return 0 on success, 1 on failure.
- */
-static int case_signal_listener(void) {
-    kc_wch_t *w;
-    kc_wch_options_t opts;
-    int rc;
-
-    rc = 0;
-    signal_count = 0;
-    signal_ctx_seen = NULL;
-    opts = kc_wch_options_default();
-    if (kc_wch_open(&w, "/tmp", &opts) != KC_WCH_OK) return 1;
-    kc_wch_on_signal(w, 55, count_signal);
-    kc_wch_listen_signals(w);
-    kc_wch_signal_listener(55);
-    rc += expect_int("signal_listener invokes", 1, signal_count);
-    rc += expect_true("correct context", signal_ctx_seen == w);
-    kc_wch_close(w);
-    return rc == 0 ? 0 : 1;
-}
-
-/**
  * Tests two contexts coexist.
  * @return 0 on success, 1 on failure.
  */
@@ -319,11 +178,6 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "open-close") == 0) return case_open_close();
     if (strcmp(argv[1], "stop") == 0) return case_stop();
     if (strcmp(argv[1], "poll") == 0) return case_poll();
-    if (strcmp(argv[1], "on-signal") == 0) return case_on_signal();
-    if (strcmp(argv[1], "raise-signal") == 0) return case_raise_signal();
-    if (strcmp(argv[1], "listen-signals") == 0) return case_listen_signals();
-    if (strcmp(argv[1], "listen-signal") == 0) return case_listen_signal();
-    if (strcmp(argv[1], "signal-listener") == 0) return case_signal_listener();
     if (strcmp(argv[1], "multictx") == 0) return case_multictx();
     fprintf(stderr, "unknown test case: %s\n", argv[1]);
     return 2;

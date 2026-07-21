@@ -51,15 +51,6 @@
 
 #define KC_WCH_QUEUE_SIZE 256
 
-typedef struct {
-    int sig;
-    kc_wch_signal_callback_t cb;
-} kc_wch_signal_entry_t;
-
-static kc_wch_t **g_signal_ctx_list = NULL;
-static int g_signal_ctx_cap = 0;
-static int g_signal_ctx_count = 0;
-
 struct kc_wch {
     char *root;
     int recursive;
@@ -79,9 +70,6 @@ struct kc_wch {
     char q_path[KC_WCH_QUEUE_SIZE][PATH_MAX];
     int q_used;
 
-    kc_wch_signal_entry_t *signal_handlers;
-    int n_signal_handlers;
-    int signal_handlers_capacity;
     volatile sig_atomic_t stop_requested;
 
 #ifdef __linux__
@@ -807,12 +795,6 @@ int kc_wch_poll(kc_wch_t *w, kc_wch_event_t *ev, int timeout_ms) {
 int kc_wch_close(kc_wch_t *w) {
     int i;
     if (!w) return KC_WCH_OK;
-    for (i = 0; i < g_signal_ctx_count; i++) {
-        if (g_signal_ctx_list[i] == w) {
-            g_signal_ctx_list[i] = g_signal_ctx_list[--g_signal_ctx_count];
-            break;
-        }
-    }
     for (i = 0; i < w->path_count; i++) free(w->paths[i]);
     free(w->paths);
 #ifdef __linux__
@@ -838,7 +820,6 @@ int kc_wch_close(kc_wch_t *w) {
         CloseHandle(w->hdir);
     }
 #endif
-    free(w->signal_handlers);
     free(w->root);
     free(w);
     return KC_WCH_OK;
@@ -881,125 +862,6 @@ int kc_wch_stop(kc_wch_t *w) {
     if (!w) return KC_WCH_ERROR;
     w->stop_requested = 1;
     return KC_WCH_OK;
-}
-
-/**
- * Register a handler for a library-level signal number.
- * @param w Watcher context.
- * @param sig Application-defined signal number.
- * @param cb Callback to invoke (NULL to unregister).
- * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
- */
-int kc_wch_on_signal(kc_wch_t *w, int sig, kc_wch_signal_callback_t cb) {
-    int i;
-    if (!w) return KC_WCH_ERROR;
-    for (i = 0; i < w->n_signal_handlers; i++) {
-        if (w->signal_handlers[i].sig == sig) {
-            if (cb) {
-                w->signal_handlers[i].cb = cb;
-            } else {
-                int tail = w->n_signal_handlers - i - 1;
-                if (tail > 0) {
-                    memmove(&w->signal_handlers[i],
-                            &w->signal_handlers[i + 1],
-                            (size_t)tail * sizeof(kc_wch_signal_entry_t));
-                }
-                w->n_signal_handlers--;
-            }
-            return KC_WCH_OK;
-        }
-    }
-    if (!cb) return KC_WCH_OK;
-    if (w->n_signal_handlers >= w->signal_handlers_capacity) {
-        int nc = w->signal_handlers_capacity ? w->signal_handlers_capacity * 2 : 4;
-        kc_wch_signal_entry_t *p = realloc(w->signal_handlers,
-            (size_t)nc * sizeof(kc_wch_signal_entry_t));
-        if (!p) return KC_WCH_ERROR;
-        w->signal_handlers = p;
-        w->signal_handlers_capacity = nc;
-    }
-    w->signal_handlers[w->n_signal_handlers].sig = sig;
-    w->signal_handlers[w->n_signal_handlers].cb = cb;
-    w->n_signal_handlers++;
-    return KC_WCH_OK;
-}
-
-/**
- * Raise a library-level signal.
- * @param w Watcher context.
- * @param sig Signal number to raise.
- * @return KC_WCH_OK if handled, or KC_WCH_ERROR if no handler.
- */
-int kc_wch_raise_signal(kc_wch_t *w, int sig) {
-    int i;
-    if (!w) return KC_WCH_ERROR;
-    for (i = 0; i < w->n_signal_handlers; i++) {
-        if (w->signal_handlers[i].sig == sig) {
-            w->signal_handlers[i].cb(w);
-            return KC_WCH_OK;
-        }
-    }
-    return KC_WCH_ERROR;
-}
-
-/**
- * Set the internal signal-listener context.
- * @param w Watcher context.
- * @return KC_WCH_OK on success, or KC_WCH_ERROR if w is NULL.
- */
-int kc_wch_listen_signals(kc_wch_t *w) {
-    if (!w) return KC_WCH_ERROR;
-    if (g_signal_ctx_count >= g_signal_ctx_cap) {
-        int new_cap = g_signal_ctx_cap ? g_signal_ctx_cap * 2 : 4;
-        kc_wch_t **new_list = (kc_wch_t **)realloc(g_signal_ctx_list,
-            (size_t)new_cap * sizeof(kc_wch_t *));
-        if (!new_list) return KC_WCH_ERROR;
-        g_signal_ctx_list = new_list;
-        g_signal_ctx_cap = new_cap;
-    }
-    g_signal_ctx_list[g_signal_ctx_count++] = w;
-    return KC_WCH_OK;
-}
-
-/**
- * Wire an OS signal to the library signal listener.
- * @param w Watcher context.
- * @param sig_id OS signal number.
- * @return KC_WCH_OK on success, or KC_WCH_ERROR on failure.
- */
-int kc_wch_listen_signal(kc_wch_t *w, int sig_id) {
-    if (!w) return KC_WCH_ERROR;
-    if (g_signal_ctx_count >= g_signal_ctx_cap) {
-        int new_cap = g_signal_ctx_cap ? g_signal_ctx_cap * 2 : 4;
-        kc_wch_t **new_list = (kc_wch_t **)realloc(g_signal_ctx_list,
-            (size_t)new_cap * sizeof(kc_wch_t *));
-        if (!new_list) return KC_WCH_ERROR;
-        g_signal_ctx_list = new_list;
-        g_signal_ctx_cap = new_cap;
-    }
-    g_signal_ctx_list[g_signal_ctx_count++] = w;
-#ifdef _WIN32
-    (void)sig_id;
-#else
-    signal(sig_id, kc_wch_signal_listener);
-#endif
-    return KC_WCH_OK;
-}
-
-/**
- * Generic signal-listener compatible with signal() / sigaction().
- * @param sig OS signal number.
- * @return None.
- */
-void kc_wch_signal_listener(int sig) {
-    int i;
-    for (i = 0; i < g_signal_ctx_count; i++) {
-        if (g_signal_ctx_list[i] &&
-            kc_wch_raise_signal(g_signal_ctx_list[i], sig) == 0)
-            return;
-    }
-    signal(sig, SIG_DFL);
-    raise(sig);
 }
 
 /**

@@ -12,17 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
-
-/**
- * Signal callback for SIGINT and SIGTERM.
- * @param w Watcher context.
- * @return None.
- */
-static void kc_wch_signal_cb(kc_wch_t *w) {
-    kc_wch_stop(w);
-}
-
 /**
  * Print command usage information.
  * @param name Program executable name.
@@ -94,14 +83,6 @@ int main(int argc, char **argv) {
         kc_wch_options_free(&opts);
         return 1;
     }
-
-    kc_wch_on_signal(w, SIGINT, kc_wch_signal_cb);
-    kc_wch_on_signal(w, SIGTERM, kc_wch_signal_cb);
-    kc_wch_listen_signals(w);
-#ifndef _WIN32
-    kc_wch_listen_signal(w, SIGINT);
-    kc_wch_listen_signal(w, SIGTERM);
-#endif
 
     kc_wch_event_t ev;
     const char *labels[] = {"add", "upd", "del"};
